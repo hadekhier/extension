@@ -27,6 +27,23 @@ string trim(const string& s)
     return ltrim(rtrim(s));
 }
 
+string remove_duplicates(const string& str)
+{
+    string res("");
+    for (auto c = str.cbegin(); c!=str.cend(); ++c) {
+        bool add = true;
+        for (auto old = res.cbegin(); old!=res.cend(); ++old) {
+            if (*old == *c) {
+                add = false;
+                break;
+            }
+        }
+        if (add) res.push_back(*c);
+    }
+
+    return res;
+}
+
 #define REGEX_CLASS_CONCRETE(name,strname,regex) \
 class name : public Concrete                     \
 {                                                \
@@ -299,7 +316,7 @@ public:
         } else {
             if (e1->isConcrete) {
                 if (e2->isConcrete) {
-                    return this;
+                    return false;
                 } else {
                     ischanged = e2->setClosestLeaf(token);
                 }
@@ -762,14 +779,16 @@ int main()
     // cout <<static_cast<const SpecificChar*>(R1_binary->e1)->toRegex();
     // cout <<static_cast<const SpecificChar*>(R1_binary->e2)->toRegex();
     // cout <<(static_cast<const SpecificChar*>(R1_binary->e1)->toRegex()>=static_cast<const SpecificChar*>(R1_binary->e2)->toRegex());
-        
 
-    string r2("endwith(startwith(<3>))");
-    Regex* R2 = stringToRegex(r2);
-    const Unary* R2_unary = static_cast<const Unary*>(R2);
-    cout<<R2<<"\n"<<R2_unary<<"\n";
-    cout <<regex_instance_of<Startwith,Endwith,Contain>(R2_unary);
-    cout <<regex_instance_of<Startwith,Endwith,Contain>(R2_unary->e);
+
+    // string r2("endwith(startwith(<3>))");
+    // Regex* R2 = stringToRegex(r2);
+    // const Unary* R2_unary = static_cast<const Unary*>(R2);
+    // cout<<R2<<"\n"<<R2_unary<<"\n";
+    // cout <<regex_instance_of<Startwith,Endwith,Contain>(R2_unary);
+    // cout <<regex_instance_of<Startwith,Endwith,Contain>(R2_unary->e);
+
+    // string r1("or(or(<num>,<2>),<4>)");
 // return 0;
 
     //collect all strings as sets
@@ -785,7 +804,7 @@ int main()
     vector<string> accept_examples = {"80","81","82","83","84"};//if max len is t, then concat must use optional after t leaves
     vector<string> reject_examples = {"85","86","87","88","89"};
 
-    vector<string> literal_str = {"8"}; //literals of each example
+    vector<string> literal_str = {"80","81"}; //literals of each example
     vector<string> general_str = {"num"};
 //MISSING or for all literals and each example's literals
     vector<string> include_Str = {"or","concat"};
@@ -797,30 +816,45 @@ int main()
 
     //only seperate letters!!! using concat'ed needs changes
     //or_over_all_the_single_chars
-    Or* or_ptr = new Or();
     vector<Regex*> literal;
     for (auto iter = literal_str.begin(); iter!=literal_str.end(); ++iter) {
         if (iter->size() == 1) {
             literal.push_back(new SpecificChar(*iter));
-            if (or_ptr->e2 == nullptr) {
-                or_ptr->setClosestLeaf(new SpecificChar(*iter));
-            } else {
-                Or* new_root = new Or();
-                or_ptr = new_root;
-            }
-            
         } else {
-            Regex* cat_over_examples_single_chars = new Concat();
-            Regex* concat_ptr = cat_over_examples_single_chars;
+            //cat_over_each_examples_single_chars
+            Concat* concat_ptr = new Concat();
             for (auto c = (*iter).begin(); c!=(*iter).end(); ++c) {
                 literal.push_back(new SpecificChar(string(1,*c)));
+
+                if (concat_ptr->e2 == nullptr) {
+                    concat_ptr->setClosestLeaf(new SpecificChar(string(1,*c)));
+                } else {
+                    Concat* new_root = new Concat(concat_ptr,new SpecificChar(string(1,*c)));
+                    concat_ptr = new_root;
+                }
             }
+            literal.push_back(concat_ptr);
         }
-        
     }
 
-    if (or_ptr->e2 == nullptr) {
-        delete or_ptr;
+    string all_literals("");
+    for (auto iter = literal_str.begin(); iter!=literal_str.end(); ++iter) {
+        all_literals+=*iter;
+    }
+    all_literals = remove_duplicates(all_literals);
+
+    if (all_literals.size()>1) {
+        Or* or_ptr = new Or();
+        for (auto c = all_literals.begin(); c!=all_literals.end(); ++c) {
+            if (or_ptr->e2 == nullptr) {
+                or_ptr->setClosestLeaf(new SpecificChar(string(1,*c)));
+            } else {
+                Or* new_root = new Or(or_ptr,new SpecificChar(string(1,*c)));
+                or_ptr = new_root;
+            }
+        }
+
+        literal.push_back(or_ptr);
     }
 
     vector<Regex*> general;
@@ -848,7 +882,7 @@ int main()
     }
 
     queue<Regex*> tokens = set_tokens(accept_examples,literal,general,include,exclude_node);
-
+return 0;
     Regex* p = algo1(tokens,accept_examples,reject_examples,exclude_tree);
     if (p!=nullptr) {
         delete p;
