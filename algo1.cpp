@@ -788,8 +788,8 @@ int main()
     // cout <<regex_instance_of<Startwith,Endwith,Contain>(R2_unary);
     // cout <<regex_instance_of<Startwith,Endwith,Contain>(R2_unary->e);
 
-    // string r1("or(or(<num>,<2>),<4>)");
-// return 0;
+    string r("or(<num>,<2>)");
+return 0;
 
     //collect all strings as sets
     //for each string add the Regex() for it
@@ -804,9 +804,9 @@ int main()
     vector<string> accept_examples = {"80","81","82","83","84"};//if max len is t, then concat must use optional after t leaves
     vector<string> reject_examples = {"85","86","87","88","89"};
 
-    vector<string> literal_str = {"80","81"}; //literals of each example
+    vector<string> literal_str = {"80","81"};
     vector<string> general_str = {"num"};
-//MISSING or for all literals and each example's literals
+
     vector<string> include_Str = {"or","concat"};
     vector<string> exclude_Str = {"and","star","optional","contain","let","low","cap"};
 
@@ -815,17 +815,12 @@ int main()
     //sort each str set and (nlogn) find if exclude has something commen with any of the other (n)
 
     //only seperate letters!!! using concat'ed needs changes
-    //or_over_all_the_single_chars
     vector<Regex*> literal;
     for (auto iter = literal_str.begin(); iter!=literal_str.end(); ++iter) {
-        if (iter->size() == 1) {
-            literal.push_back(new SpecificChar(*iter));
-        } else {
+        if (iter->size() > 1) {
             //cat_over_each_examples_single_chars
             Concat* concat_ptr = new Concat();
             for (auto c = (*iter).begin(); c!=(*iter).end(); ++c) {
-                literal.push_back(new SpecificChar(string(1,*c)));
-
                 if (concat_ptr->e2 == nullptr) {
                     concat_ptr->setClosestLeaf(new SpecificChar(string(1,*c)));
                 } else {
@@ -843,6 +838,11 @@ int main()
     }
     all_literals = remove_duplicates(all_literals);
 
+    for (auto c = all_literals.begin(); c!=all_literals.end(); ++c) {
+        literal.push_back(new SpecificChar(string(1,*c)));
+    }
+
+    //or_over_all_the_single_chars
     if (all_literals.size()>1) {
         Or* or_ptr = new Or();
         for (auto c = all_literals.begin(); c!=all_literals.end(); ++c) {
@@ -882,7 +882,7 @@ int main()
     }
 
     queue<Regex*> tokens = set_tokens(accept_examples,literal,general,include,exclude_node);
-return 0;
+// return 0;
     Regex* p = algo1(tokens,accept_examples,reject_examples,exclude_tree);
     if (p!=nullptr) {
         delete p;
