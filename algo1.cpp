@@ -4,6 +4,7 @@
 #include <chrono>
 #include <algorithm>
 #include <regex>
+#include <vecotr>
 
 // #include "CatchMemoryLeak.h"
 // #include "dbg.h"
@@ -455,7 +456,7 @@ Regex* stringToRegex(const string& str)//str is valid
 }
 
 template<typename T>
-inline void token_push_if_needed(queue<Regex*>& tokens,
+inline void token_push_concrete_if_needed(queue<Regex*>& tokens,
     const vector<Regex*>& literal, const vector<Regex*>& general,
     const vector<Regex*>& include, const vector<Regex*>& exclude_node)
 {
@@ -484,9 +485,50 @@ inline void token_push_if_needed(queue<Regex*>& tokens,
 cout<<string(*ptr)<<" ";
     tokens.push(ptr);
 }
+template<typename T>
+inline void token_push_unary_if_needed(queue<Regex*>& tokens,
+    const vector<Regex*>& literal, const vector<Regex*>& general,
+    const vector<Regex*>& include, const vector<Regex*>& exclude_node)
+{
+    for (auto iter = include.cbegin(); iter!=include.cend(); ++iter) {
+        if (regex_instance_of<T>(*iter) && static_cast<Unary*>(*iter)->e==nullptr) {
+            return;
+        }
+    }
+    for (auto iter = exclude_node.cbegin(); iter!=exclude_node.cend(); ++iter) {
+        if (regex_instance_of<T>(*iter) && static_cast<Unary*>(*iter)->e==nullptr) {
+            return;
+        }
+    }
+
+    T* ptr = new T();
+cout<<string(*ptr)<<" ";
+    tokens.push(ptr);
+}
+template<typename T>
+inline void token_push_binary_if_needed(queue<Regex*>& tokens,
+    const vector<Regex*>& literal, const vector<Regex*>& general,
+    const vector<Regex*>& include, const vector<Regex*>& exclude_node)
+{
+    for (auto iter = include.cbegin(); iter!=include.cend(); ++iter) {
+        if (regex_instance_of<T>(*iter) && static_cast<Binary*>(*iter)->e1==nullptr && static_cast<Binary*>(*iter)->e2==nullptr) {
+            return;
+        }
+    }
+    for (auto iter = exclude_node.cbegin(); iter!=exclude_node.cend(); ++iter) {
+        if (regex_instance_of<T>(*iter) && static_cast<Binary*>(*iter)->e1==nullptr && static_cast<Binary*>(*iter)->e2==nullptr) {
+            return;
+        }
+    }
+
+    T* ptr = new T();
+cout<<string(*ptr)<<" ";
+    tokens.push(ptr);
+}
+
 
 //might take the ptrs and not the clones bc they are unused afterwards
-    //exclude node doesnt conflict with the includes
+    //suppose exclude node doesnt conflict with the includes
 queue<Regex*> set_tokens(const vector<string>& accept_examples,
     const vector<Regex*>& literal, const vector<Regex*>& general,
     const vector<Regex*>& include, const vector<Regex*>& exclude_node)
@@ -506,11 +548,11 @@ cout<<string(**iter)<<" ";
         tokens.push((*iter)->clone());
     }
 
-    token_push_if_needed<Num>(tokens,literal,general,include,exclude_node);
-    token_push_if_needed<Let>(tokens,literal,general,include,exclude_node);
-    token_push_if_needed<Low>(tokens,literal,general,include,exclude_node);
-    token_push_if_needed<Cap>(tokens,literal,general,include,exclude_node);
-    token_push_if_needed<Any>(tokens,literal,general,include,exclude_node);
+    token_push_concrete_if_needed<Num>(tokens,literal,general,include,exclude_node);
+    token_push_concrete_if_needed<Let>(tokens,literal,general,include,exclude_node);
+    token_push_concrete_if_needed<Low>(tokens,literal,general,include,exclude_node);
+    token_push_concrete_if_needed<Cap>(tokens,literal,general,include,exclude_node);
+    token_push_concrete_if_needed<Any>(tokens,literal,general,include,exclude_node);
 
     //accept \ exclude_nodes -> specificChars (maybe specificNums SpLets SpCaps SpLows. for Or optimizing)
     for (auto example_iter = accept_examples.cbegin(); example_iter!=accept_examples.cend(); ++example_iter) {
@@ -545,22 +587,22 @@ cout<<"<"<<*char_iter<<"> ";
         }
     }
 
-    token_push_if_needed<Startwith>(tokens,literal,general,include,exclude_node);
-    token_push_if_needed<Endwith>(tokens,literal,general,include,exclude_node);
-    token_push_if_needed<Contain>(tokens,literal,general,include,exclude_node);
-    // token_push_if_needed<Not>(tokens,literal,general,include,exclude_node);
-    token_push_if_needed<Optional>(tokens,literal,general,include,exclude_node);
-    token_push_if_needed<Star>(tokens,literal,general,include,exclude_node);
+    token_push_unary_if_needed<Startwith>(tokens,literal,general,include,exclude_node);
+    token_push_unary_if_needed<Endwith>(tokens,literal,general,include,exclude_node);
+    token_push_unary_if_needed<Contain>(tokens,literal,general,include,exclude_node);
+    // token_push_unary_if_needed<Not>(tokens,literal,general,include,exclude_node);
+    token_push_unary_if_needed<Optional>(tokens,literal,general,include,exclude_node);
+    token_push_unary_if_needed<Star>(tokens,literal,general,include,exclude_node);
 
-    token_push_if_needed<Concat>(tokens,literal,general,include,exclude_node);
-    token_push_if_needed<Or>(tokens,literal,general,include,exclude_node);
-    token_push_if_needed<And>(tokens,literal,general,include,exclude_node);
+    token_push_binary_if_needed<Concat>(tokens,literal,general,include,exclude_node);
+    token_push_binary_if_needed<Or>(tokens,literal,general,include,exclude_node);
+    token_push_binary_if_needed<And>(tokens,literal,general,include,exclude_node);
 
 cout<<"\n";
     return tokens;
 }
 
-//send skeip_token_for_p to the path token will go to and return that
+//send skip_token_for_p to the path token will go to and return that
 bool skip_token_for_p(const Regex* const p, const Regex* const token)
 {
     //or(start(a),start(b)) = start(or(a,b)))
@@ -789,7 +831,7 @@ int main()
     // cout <<regex_instance_of<Startwith,Endwith,Contain>(R2_unary->e);
 
     string r("or(<num>,<2>)");
-return 0;
+// return 0;
 
     //collect all strings as sets
     //for each string add the Regex() for it
