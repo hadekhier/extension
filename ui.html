@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Cat Coding</title>
+	<script>
+		function getSelectionText() {
+			var text = "";
+			var activeEl = document.activeElement;
+			var activeElTagName = activeEl ? activeEl.tagName.toLowerCase() : null;
+			if (
+				(activeElTagName == "textarea") || (activeElTagName == "input" &&
+					/^(?:text|search|password|tel|url)$/i.test(activeEl.type)) &&
+				(typeof activeEl.selectionStart == "number")
+			) {
+				text = activeEl.value.slice(activeEl.selectionStart, activeEl.selectionEnd);
+			} else if (window.getSelection) {
+				text = window.getSelection().toString();
+			}
+			return text;
+		}
+		function colorize(aCommandName, aShowDefaultUI, aValueArgument) {
+			// Get Selection
+			sel = window.getSelection();
+			range = undefined;
+			if (sel.rangeCount && sel.getRangeAt) {
+				range = sel.getRangeAt(0);
+			}
+			// Set design mode to on
+			document.designMode = "on";
+			if (range) {
+				sel.removeAllRanges();
+				sel.addRange(range);
+			}
+			// Colorize text
+			document.execCommand(aCommandName, aShowDefaultUI, aValueArgument);
+			// Set design mode to off
+			document.designMode = "off";
+		}
+
+		function markLiteral() {
+			colorize("ForeColor", false, "#ffc702");
+			document.getElementById("selected").value = document.getElementById("selected").value + "\n" + getSelectionText();
+		}
+		function markGeneral() {
+			colorize("hilitecolor", false, "#3531ff");
+			document.getElementById("selected").value = document.getElementById("selected").value + "\n" + getSelectionText();
+		}
+	</script>
+</head>
+
+<body>
+	<h1 id="times-refreshed">Refreshed ${panelCount} times.</h1>
+	<h1 id="hudred-miliseconds-passed">0 miliseconds have passed.</h1>
+	<script>
+		const counter = document.getElementById('hudred-miliseconds-passed');
+		let count = 0;
+		// setInterval(() => { counter.textContent = count++ + "00 miliseconds have passed."; }, 100);
+	</script>
+
+	<textarea id="selected" rows="3" cols="50"></textarea>
+	<br />
+
+	<style>
+		button#set_literal {
+			color: #ffc702;
+			background-color: #ffffff;
+			font-size: 19px;
+			border: 1px solid #000000;
+			padding: 15px 50px;
+			cursor: pointer
+		}
+
+		button#set_literal:hover {
+			color: #ffffff;
+			background-color: #ffc702;
+		}
+
+		button#set_general {
+			color: #ffffff;
+			background-color: #3531ff;
+			font-size: 19px;
+			border: 1px solid #000000;
+			padding: 15px 50px;
+			cursor: pointer
+		}
+
+		button#set_general:hover {
+			color: #3531ff;
+			background-color: #ffffff;
+		}
+	</style>
+	<button type="button" name="set_iteral" id="set_literal" onclick="markLiteral()">Literal</button>
+	<button type="button" name="set_general" id="set_general" onclick="markGeneral()">General</button>
+
+	<style type="text/css">
+		.tg {
+			border-collapse: collapse;
+			border-spacing: 0;
+		}
+
+		.tg td {
+			border-color: black;
+			border-style: solid;
+			border-width: 1px;
+			font-family: Arial, sans-serif;
+			font-size: 14px;
+			overflow: hidden;
+			padding: 10px 5px;
+			word-break: normal;
+		}
+
+		.tg th {
+			border-color: black;
+			border-style: solid;
+			border-width: 1px;
+			font-family: Arial, sans-serif;
+			font-size: 14px;
+			font-weight: normal;
+			overflow: hidden;
+			padding: 10px 5px;
+			word-break: normal;
+		}
+
+		.tg .tg-2n01 {
+			background-color: #3531ff;
+			border-color: inherit;
+			text-align: left;
+			vertical-align: top
+		}
+
+		.tg .tg-llyw {
+			background-color: #c0c0c0;
+			border-color: inherit;
+			text-align: left;
+			vertical-align: top
+		}
+
+		.tg .tg-quem {
+			background-color: #c0c0c0;
+			border-color: inherit;
+			color: #ffc702;
+			text-align: left;
+			vertical-align: top
+		}
+
+		.tg .tg-c6of {
+			background-color: #ffffff;
+			border-color: inherit;
+			text-align: left;
+			vertical-align: top
+		}
+	</style>
+	<table class="tg">
+		<thead>
+			<tr>
+				<th class="tg-llyw">Example</th>
+				<th class="tg-llyw">ACC/REJ</th>
+				<th class="tg-quem">Literal</th>
+				<th class="tg-2n01">General</th>
+			</tr>
+		</thead>
+		<tbody>
+			<tr>
+				<td class="tg-c6of"><input type="text" name="example" placeholder="Enter your example" size="28"
+						id="example" required></td>
+				<td class="tg-c6of"> <select name="acc_or_rej" id="acc_or_rej">
+						<option value="acc">Accept</option>
+						<option value="rej">Reject</option>
+					</select></td>
+				<td class="tg-c6of"></td>
+				<td class="tg-c6of"></td>
+			</tr>
+		</tbody>
+	</table>
+
+	<style>
+		input[type=submit] {
+			color: #ffffff;
+			background-color: #1c5e5f;
+			font-size: 19px;
+			border: 1px solid #1c5e5f;
+			padding: 15px 50px;
+			cursor: pointer
+		}
+
+		input[type=submit]:hover {
+			color: #1c5e5f;
+			background-color: #ffffff;
+		}
+	</style>
+	<input type="submit" name="run" value="Run Synthesizer">
+
+	<progress id="aa" value="0" max="15" style="width: 100%; height: 35px;">0%</progress>
+	<script>
+		const secs = document.getElementById('aa');
+		let sec = 0;
+		setInterval(() => { secs.value=sec++; }, 1000);
+	</script>
+
+	<input type="file" name="previous_session" accept=".json" required>
+
+</body>
+
+</html>

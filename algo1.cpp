@@ -4,7 +4,7 @@
 #include <chrono>
 #include <algorithm>
 #include <regex>
-#include <vecotr>
+#include <vector>
 
 // #include "CatchMemoryLeak.h"
 // #include "dbg.h"
@@ -45,19 +45,20 @@ string remove_duplicates(const string& str)
     return res;
 }
 
-#define REGEX_CLASS_CONCRETE(name,strname,regex) \
-class name : public Concrete                     \
-{                                                \
-public:                                          \
-    name* clone() const override {               \
-        return new name(*this);                  \
-    }                                            \
-    operator string() const override {           \
-        return "<" strname ">";                  \
-    }                                            \
-    string toRegex() const override {            \
-        return regex;                            \
-    }                                            \
+#define REGEX_CLASS_CONCRETE(name,strname,regex,is_what) \
+class name : public Concrete                             \
+{                                                        \
+public:                                                  \
+    name() : Concrete() {is_what = true;}                \
+    name* clone() const override {                       \
+        return new name(*this);                          \
+    }                                                    \
+    operator string() const override {                   \
+        return "<" strname ">";                          \
+    }                                                    \
+    string toRegex() const override {                    \
+        return regex;                                    \
+    }                                                    \
 }
 
 #define REGEX_CLASS_UNARY(name,strname,before,after)      \
@@ -111,14 +112,29 @@ public:                                                 \
     }                                                   \
 }
 
+#define REGEX_CLASS_SPECIFIC(name,is_what)             \
+class name : public SpecificChar                       \
+{                                                      \
+public:                                                \
+    name(string c) : SpecificChar(c) {is_what = true;} \
+    name(char c) : SpecificChar(c) {is_what = true;}   \
+    name* clone() const override {                     \
+        return new name(*this);                        \
+    }                                                  \
+}
+
 
 class Regex
 {
 public:
     bool isConcrete;
     int closest_leaf;
+    bool isNum;
+    bool isLet;
+    bool isLow;
+    bool isCap;
 
-    Regex() : isConcrete(false), closest_leaf(0) {}
+    Regex() : isConcrete(false), closest_leaf(0), isNum(false), isLet(false), isLow(false), isCap(false) {}
     virtual ~Regex() = default;
     Regex(const Regex& other) = default;
     Regex& operator=(const Regex& other) = delete;
@@ -149,21 +165,19 @@ public:
     }
 };
 
-REGEX_CLASS_CONCRETE(Any,"any",".");
-
-REGEX_CLASS_CONCRETE(Num,"num","[0-9]");
-
-REGEX_CLASS_CONCRETE(Let,"let","[a-zA-Z]");
-
-REGEX_CLASS_CONCRETE(Low,"low","[a-z]");
-
-REGEX_CLASS_CONCRETE(Cap,"cap","[A-Z]");
+REGEX_CLASS_CONCRETE(Any,"any",".",isConcrete);//no special indecator
+REGEX_CLASS_CONCRETE(Num,"num","[0-9]",isNum);
+REGEX_CLASS_CONCRETE(Let,"let","[a-zA-Z]",isLet);
+REGEX_CLASS_CONCRETE(Low,"low","[a-z]",isLow);
+REGEX_CLASS_CONCRETE(Cap,"cap","[A-Z]",isCap);
 
 class SpecificChar : public Concrete {
 public:
     string c;
+// string name;
 
-    SpecificChar(string c) : c(c) {}
+    SpecificChar(string c) : c(c) {}//{name="CHAR";}
+    SpecificChar(char c) : c(string(1,c)) {}//{name="CHAR";}
     virtual SpecificChar* clone() const override {
         return new SpecificChar(*this);
     }
@@ -175,13 +189,20 @@ public:
     }
 };
 
-class SpecificNum : public SpecificChar {
-public:
-    using SpecificChar::SpecificChar;
-    SpecificNum* clone() const override {
-        return new SpecificNum(*this);
-    }
-};
+REGEX_CLASS_SPECIFIC(SpecificNum,isNum);
+REGEX_CLASS_SPECIFIC(SpecificLet,isLet);
+REGEX_CLASS_SPECIFIC(SpecificLow,isLow);
+REGEX_CLASS_SPECIFIC(SpecificCap,isCap);
+//SpSeq (big concat)
+//big or
+
+SpecificChar* createSpecificChar(char c)
+{
+    if ('0'<=c && c<='9') return new SpecificNum(c);
+    else if ('a'<=c && c<='z') return new SpecificLow(c);
+    else if ('A'<=c && c<='Z') return new SpecificCap(c);
+    else return new SpecificChar(c);
+}
 
 class Unary : public Regex
 {
@@ -193,7 +214,7 @@ public:
             isConcrete = e->isConcrete;
             closest_leaf = e->closest_leaf + 1;
         } else {
-            isConcrete = false;
+            // isConcrete = false;
             closest_leaf = 1;
         }
         Unary::e = e;
@@ -203,14 +224,8 @@ public:
             delete e;
         }
     }
-    Unary(const Unary& other) {
-        isConcrete = other.isConcrete;
-        closest_leaf = other.closest_leaf;
-        if (other.e==nullptr) {
-            e = nullptr;
-        } else {
-            e = other.e->clone();
-        }
+    Unary(const Unary& other) : Regex(other) {
+        e = other.e==nullptr ? nullptr : other.e->clone();
     }
     Unary& operator=(const Unary& other) = delete;
 
@@ -237,15 +252,10 @@ public:
 };
 
 REGEX_CLASS_UNARY(Startwith,"startwith","",".?*");
-
 REGEX_CLASS_UNARY(Endwith,"endwith",".?*","");
-
 REGEX_CLASS_UNARY(Contain,"contain",".?*",".?*");
-
 REGEX_CLASS_UNARY(Not,"not","NOT(",")"); ///___________________________HOW_IN_REGEX____________________________
-
 REGEX_CLASS_UNARY(Optional,"optional","","?");
-
 REGEX_CLASS_UNARY(Star,"star","","*");
 
 
@@ -260,7 +270,7 @@ public:
             isConcrete = e1->isConcrete;
             closest_leaf = e1->closest_leaf + 1;
         } else {
-            isConcrete = false;
+            // isConcrete = false;
             closest_leaf = 1;
         }
         if (e2!=nullptr) {
@@ -281,32 +291,13 @@ public:
             delete e2;
         }
     }
-    Binary(const Binary& other) {
-        Regex* old_e1 = e1;
-        Regex* old_e2 = e2;
-        isConcrete = other.isConcrete;
-        closest_leaf = other.closest_leaf;
-        if (other.e1==nullptr) {
-            e1 = nullptr;
-        } else {
-            e1 = (other.e1)->clone();
-        }
-        if (other.e2==nullptr) {
-            e2 = nullptr;
-        } else {
-            e2 = (other.e2)->clone();
-        }
-
-        if (old_e1!=nullptr) {
-            // delete old_e1;
-        }
-        if (old_e2!=nullptr) {
-            // delete old_e2;
-        }
+    Binary(const Binary& other) : Regex(other) {
+        e1 = other.e1==nullptr ? nullptr : other.e1->clone();
+        e2 = other.e2==nullptr ? nullptr : other.e2->clone();
     }
     Binary& operator=(const Binary& other) = delete;
 
-    bool setClosestLeaf(Regex* token) override {
+    virtual bool setClosestLeaf(Regex* token) override {
         bool ischanged = false;
         if (e1==nullptr) {
             e1 = token;
@@ -335,12 +326,12 @@ public:
         }
 
         if (e2==nullptr) {
-            // closest_leaf = 1;
             // isConcrete = false;
+            // closest_leaf = 1;
         } else {
-            closest_leaf = !e1->isConcrete ? e1->closest_leaf+1 : e2->closest_leaf+1;
-            closest_leaf = !e2->isConcrete ? min(closest_leaf,e2->closest_leaf+1) : closest_leaf;
             isConcrete = e1->isConcrete && e2->isConcrete;
+            closest_leaf = !e1->isConcrete ? e1->closest_leaf+1 : e2->closest_leaf+1; //temporary value
+            closest_leaf = !e2->isConcrete ? min(closest_leaf,e2->closest_leaf+1) : closest_leaf; //final value
         }
 
         return ischanged;
@@ -373,10 +364,76 @@ public:
 };
 
 REGEX_CLASS_BINARY(Concat,"concat","");
-
-REGEX_CLASS_BINARY(Or,"or","|");
-
 REGEX_CLASS_BINARY(And,"and","&");
+
+class Or : public Binary
+{
+public:
+    Or(Regex* e1 = nullptr, Regex* e2 = nullptr) : Binary(e1,e2) {
+        if (e1!=nullptr) {
+            isNum = e1->isNum;
+            isLow = e1->isLow;
+            isCap = e1->isCap;
+        } else {
+            // isNum = false;
+            // isLow = false;
+            // isCap = false;
+        }
+        if (e2!=nullptr) {
+            isNum = isNum && e2->isNum;
+            isLow = isLow && e2->isLow;
+            isCap = isCap && e2->isCap;
+        } else {
+            isNum = false;
+            isLow = false;
+            isCap = false;
+        }
+    }
+    bool setClosestLeaf(Regex* token) override {
+        if (Binary::setClosestLeaf(token)==false) {
+            return false;
+        }
+
+        if (e2==nullptr) {
+            // isNum = false;
+            // isLow = false;
+            // isCap = false;
+        } else {
+            isNum = e1->isNum && e2->isNum;
+            isLow = e1->isLow && e2->isLow;
+            isCap = e1->isCap && e2->isCap;
+        }
+
+        return true;
+    }
+
+    Or *clone() const override {
+        return new Or(*this);
+    }
+    operator string() const override {
+        string e1_string = string("?");
+        if (e1 != nullptr) {
+            e1_string = string(*e1);
+        }
+        string e2_string = string("?");
+        if (e2 != nullptr) {
+            e2_string = string(*e2);
+        }
+        return "or("+e1_string+","+e2_string+")";
+    }
+    string toRegex() const override {
+        string e1_regex = string("()");
+        if (e1 != nullptr) {
+            e1_regex = e1->toRegex();
+        }
+        string e2_regex = string("()");
+        if (e2 != nullptr) {
+            e2_regex = e2->toRegex();
+        }
+        return "("+e1_regex+"|"+e2_regex+")";
+    }
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -434,7 +491,7 @@ Regex* stringToRegex(const string& str)//str is valid
         }
     }
 
-    if (root.size()==1) return new SpecificChar(root);
+    if (root.size()==1) return createSpecificChar(root[0]);
     else if (root=="num") return new Num();
     else if (root=="let") return new Let();
     else if (root=="low") return new Low();
@@ -526,15 +583,15 @@ cout<<string(*ptr)<<" ";
     tokens.push(ptr);
 }
 
-
 //might take the ptrs and not the clones bc they are unused afterwards
-    //suppose exclude node doesnt conflict with the includes
+//suppose exclude node doesnt conflict with the includes
+//if char was set general, dont add it to specificChars => get index of chosen chars / git number of chars set general (88 has 2 chars "8" so we need both to be selected to not use "8")
 queue<Regex*> set_tokens(const vector<string>& accept_examples,
     const vector<Regex*>& literal, const vector<Regex*>& general,
     const vector<Regex*>& include, const vector<Regex*>& exclude_node)
 {
     queue<Regex*> tokens;
-    cout<<"the tokens: ";
+cout<<"the tokens: ";
     for (auto iter = literal.cbegin(); iter!=literal.cend(); ++iter) {
 cout<<string(**iter)<<" ";
         tokens.push((*iter)->clone());
@@ -575,7 +632,7 @@ cout<<string(**iter)<<" ";
             if (!push) continue;
 
             for (auto token_iter = exclude_node.cbegin(); token_iter!=exclude_node.cend(); ++token_iter) {
-                if ((*token_iter)->toRegex() == string(1,*char_iter)) {
+                if ((*token_iter)->toRegex() == string(1,*char_iter)) {//TODO change to is<specificChar> and compare toRegex[0] (if specificSeq and bigOr dont inhirit it)
                     push = false;
                     break;
                 }
@@ -583,7 +640,7 @@ cout<<string(**iter)<<" ";
             if (!push) continue;
 
 cout<<"<"<<*char_iter<<"> ";
-            tokens.push(new SpecificChar(string(1,*char_iter)));
+            tokens.push(createSpecificChar(*char_iter));
         }
     }
 
@@ -602,6 +659,58 @@ cout<<"\n";
     return tokens;
 }
 
+//is it useful to have parent's type pointing to child1 and child2
+bool subtree_is_useless(const Regex* const parent, const Regex* const child1, const Regex* const child2 = nullptr)
+{
+    if (regex_instance_of<Startwith,Endwith,Contain>(parent)
+         && regex_instance_of<Startwith,Endwith,Contain,Optional,Any>(child1)) {
+        return true;
+    }
+
+    // combinations with no effect
+    if (both_regexes_instance_of<Not,Optional,Star>(parent,child1)) return true;
+
+    //only left child can be derived //use might ruit it with {include or(<num>,?) exclude <num>}
+    if (both_regexes_instance_of<Concat,Or,And>(parent,child2)) return true;
+        // const Binary* p_binary = static_cast<const Binary*>(parent);
+
+    if (regex_instance_of<Or,And>(parent)
+            && (regex_instance_of<Any>(child1) ||  regex_instance_of<Any>(child2))) {
+        return true;
+    }
+
+    if (regex_instance_of<And>(parent)
+            && (regex_instance_of<Concrete>(child1) && regex_instance_of<Concrete>(child2))) {
+        return true;
+    }
+
+    if (regex_instance_of<Or>(parent)) {
+        // {
+        //     Regex* q=p->clone();
+        //     q->setClosestLeaf(token->clone());
+        //     if (q->toRegex()=="((0|1)|[0-9])") {
+        //         cout<<"HERE\n";
+        //     }
+        //     delete q;
+        // }
+        if (both_regexes_instance_of<Concrete>(child1,child2)) {
+            if (both_regexes_instance_of<SpecificChar>(child1,child2)
+                    && static_cast<const SpecificChar*>(child1)->c>=static_cast<const SpecificChar*>(child2)->c) {
+                return true;
+            }
+            if (both_regexes_instance_of<Num,Let,Low,Cap,Any>(child1,child2)) return true;
+            if (regex_instance_of<Low,Cap>(child1) && regex_instance_of<Low,Cap>(child2)) return true;
+        }
+        if ((regex_instance_of<Num>(child1) && child2->isNum)
+                || (child1->isNum && regex_instance_of<Num>(child2))) {
+            return true;
+        }
+        if (child1->toRegex()==child2->toRegex()) return true;
+    }
+
+    return false;
+}
+
 //send skip_token_for_p to the path token will go to and return that
 bool skip_token_for_p(const Regex* const p, const Regex* const token)
 {
@@ -612,79 +721,28 @@ bool skip_token_for_p(const Regex* const p, const Regex* const token)
 
     // combinations with no effect or equivalent to other combinations
 
-    const Regex* parent = p->getParentOfNextToken();
+    const Regex* parent = p->getParentOfNextToken(); // parent => at least one son is nullptr
 
-    if (regex_instance_of<Startwith,Endwith,Contain>(parent)
-         && regex_instance_of<Startwith,Endwith,Contain,Optional,Any>(token)) {
-        return true;
+    if (regex_instance_of<Unary>(parent)) {
+        return subtree_is_useless(parent,token);
     }
 
-    // combinations with no effect
-    if (both_regexes_instance_of<Not,Optional,Star>(parent,token)) {
-        return true;
-    }
-
-    //only left child can be derived
-    if (both_regexes_instance_of<Concat,Or,And>(parent,token)) {
+    if (regex_instance_of<Binary>(parent)) {
         const Binary* p_binary = static_cast<const Binary*>(parent);
-        if (p_binary->e1!=nullptr && p_binary->e2==nullptr)
-            return true;
-    }
-
-    if (regex_instance_of<Or,And>(parent) && regex_instance_of<Any>(token)) {
-        return true;
-    }
-
-    if (regex_instance_of<And>(parent)) {
-        const Binary* p_binary = static_cast<const Binary*>(parent);
-        if (p_binary->e1==nullptr && p_binary->e2!=nullptr) {
-            if (regex_instance_of<Concrete>(p_binary->e2) && regex_instance_of<Concrete>(token)) {
-                return true;
+        if (p_binary->e1!=nullptr || p_binary->e2!=nullptr) {
+            const Regex* child1 = p_binary->e1;
+            const Regex* child2 = p_binary->e2;
+            if (p_binary->e1!=nullptr) {
+                child2 = token;
+            } else {
+                child1 = token;
             }
-        }
-        if (p_binary->e1!=nullptr && p_binary->e2==nullptr) {
-            if (regex_instance_of<Concrete>(p_binary->e1) && regex_instance_of<Concrete>(token)) {
-                return true;
-            }
+
+            return subtree_is_useless(parent,child1,child2);
         }
     }
 
-    if (regex_instance_of<Or>(parent)) {
-        const Binary* p_binary = static_cast<const Binary*>(parent);
-        if (p_binary->e1!=nullptr && p_binary->e2==nullptr) {
-            if (both_regexes_instance_of<SpecificChar>(p_binary->e1,token)
-                && static_cast<const SpecificChar*>(p_binary->e1)->toRegex()>=static_cast<const SpecificChar*>(token)->toRegex()) {
-                return true;
-            }
-            if (both_regexes_instance_of<Num,Let,Low,Cap,Any>(p_binary->e1,token)) {
-                return true;
-            }
-            if (regex_instance_of<Low,Cap>(p_binary->e1) && regex_instance_of<Low,Cap>(token)) {
-                return true;
-            }
-            if ((regex_instance_of<Num>(p_binary->e1) && regex_instance_of<Num,SpecificNum>(token))
-                || (regex_instance_of<Num,SpecificNum>(p_binary->e1) && regex_instance_of<Num>(token))) {
-                return true;
-            }
-        } else if (p_binary->e1==nullptr && p_binary->e2!=nullptr) {
-            if (both_regexes_instance_of<SpecificChar>(p_binary->e2,token)
-                && static_cast<const SpecificChar*>(p_binary->e2)->toRegex()<=static_cast<const SpecificChar*>(token)->toRegex()) {
-                return true;
-            }
-            if (both_regexes_instance_of<Num,Let,Low,Cap,Any>(p_binary->e2,token)) {
-                return true;
-            }
-            if (regex_instance_of<Low,Cap>(p_binary->e2) && regex_instance_of<Low,Cap>(token)) {
-                return true;
-            }
-            if ((regex_instance_of<Num>(p_binary->e2) && regex_instance_of<Num,SpecificNum>(token))
-                || (regex_instance_of<Num,SpecificNum>(p_binary->e2) && regex_instance_of<Num>(token))) {
-                return true;
-            }
-        }
-    }
-
-    return false; //send skeip_token_for_p to the path token will go to and return that TOOOOOOOOOOOOOOOOOOOOOODOOOOOOOOOOOOOOOOOOOOO
+    return false; //send skip_token_for_p to the path token will go to and return that TODO TOOOOOOOOOOOOOOOOOOOOOODOOOOOOOOOOOOOOOOOOOOO
 }
 
 //use exclude
@@ -720,17 +778,14 @@ queue<Regex*> expand(const queue<Regex*>& tokens, Regex* p, const vector<Regex*>
         q->setClosestLeaf(token);
         bool push = true;
         for (auto iter = exclude_tree.cbegin(); iter!=exclude_tree.cend(); ++iter) {
-            //must not even contain
-            //must not even contain
-            //must not even contain
-            if ((*iter)->toRegex() == q->toRegex()) {//must not even contain
+            if (q->toRegex().find((*iter)->toRegex()) != std::string::npos) {
                 push = false;
                 delete q;
                 break;
             }
         }
         if (push) {
-// cout<<"q: "<<string(*q)<<endl;
+// cout<<"q: "<<string(*q)<<endl<<" isNum:"<<q->isNum<<" isLet:"<<q->isLet<<" isCap:"<<q->isCap<<" isLow:"<<q->isLow<<endl;
             if (q->isConcrete) worklist_concrete.push(q);
             else children_partial.push(q);
         }
@@ -767,7 +822,7 @@ Regex* algo1(const queue<Regex*>& tokens, const vector<string>& accept,
             if (acc) {
                 bool rej = true;
                 for (int i=0; (size_t)i<reject.size();++i) {
-                    if (regex_match(accept[i],r)) {
+                    if (regex_match(reject[i],r)) {
                         rej = false;
                         break;
                     }
@@ -809,9 +864,12 @@ Regex* algo1(const queue<Regex*>& tokens, const vector<string>& accept,
 #undef REGEX_CLASS_CONCRETE
 #undef REGEX_CLASS_UNARY
 #undef REGEX_CLASS_BINARY
+#undef REGEX_CLASS_SPECIFIC
 
-
-int main()
+//button show example
+//feature: save session
+//if chosen LIT then GEN?
+int main()//not abc = [^a]*[^b]*[^c*] ??
 {
     // string r1("or(8,8)");
     // Regex* R1 = stringToRegex(r1);
@@ -830,7 +888,13 @@ int main()
     // cout <<regex_instance_of<Startwith,Endwith,Contain>(R2_unary);
     // cout <<regex_instance_of<Startwith,Endwith,Contain>(R2_unary->e);
 
-    string r("or(<num>,<2>)");
+    // string r("or(<num>,<2>)");
+
+    // make it end
+    // queue<Regex*> tokens;
+    // tokens.push(new Or());
+    // tokens.push(new Num());
+    // tokens.push(new SpecificNum("2"));
 // return 0;
 
     //collect all strings as sets
@@ -846,7 +910,7 @@ int main()
     vector<string> accept_examples = {"80","81","82","83","84"};//if max len is t, then concat must use optional after t leaves
     vector<string> reject_examples = {"85","86","87","88","89"};
 
-    vector<string> literal_str = {"80","81"};
+    vector<string> literal_str = {"80","81","2","3","4"};
     vector<string> general_str = {"num"};
 
     vector<string> include_Str = {"or","concat"};
@@ -854,9 +918,9 @@ int main()
 
     //no duplicates
     //all strings stripped and valid
-    //sort each str set and (nlogn) find if exclude has something commen with any of the other (n)
+    //sort each str set and (nlogn) find if exclude has something common with any of the other (n)
 
-    //only seperate letters!!! using concat'ed needs changes
+    //only seperate letters!!! using concat'ed needs changes ???????????
     vector<Regex*> literal;
     for (auto iter = literal_str.begin(); iter!=literal_str.end(); ++iter) {
         if (iter->size() > 1) {
@@ -864,9 +928,9 @@ int main()
             Concat* concat_ptr = new Concat();
             for (auto c = (*iter).begin(); c!=(*iter).end(); ++c) {
                 if (concat_ptr->e2 == nullptr) {
-                    concat_ptr->setClosestLeaf(new SpecificChar(string(1,*c)));
+                    concat_ptr->setClosestLeaf(createSpecificChar(*c));
                 } else {
-                    Concat* new_root = new Concat(concat_ptr,new SpecificChar(string(1,*c)));
+                    Concat* new_root = new Concat(concat_ptr,createSpecificChar(*c));
                     concat_ptr = new_root;
                 }
             }
@@ -879,19 +943,20 @@ int main()
         all_literals+=*iter;
     }
     all_literals = remove_duplicates(all_literals);
+    std::sort(all_literals.begin(), all_literals.end());
 
     for (auto c = all_literals.begin(); c!=all_literals.end(); ++c) {
-        literal.push_back(new SpecificChar(string(1,*c)));
+        literal.push_back(createSpecificChar(*c));
     }
 
     //or_over_all_the_single_chars
     if (all_literals.size()>1) {
         Or* or_ptr = new Or();
         for (auto c = all_literals.begin(); c!=all_literals.end(); ++c) {
-            if (or_ptr->e2 == nullptr) {
-                or_ptr->setClosestLeaf(new SpecificChar(string(1,*c)));
+            if (or_ptr->e1 == nullptr || or_ptr->e2 == nullptr) {
+                or_ptr->setClosestLeaf(createSpecificChar(*c));
             } else {
-                Or* new_root = new Or(or_ptr,new SpecificChar(string(1,*c)));
+                Or* new_root = new Or(or_ptr,createSpecificChar(*c));
                 or_ptr = new_root;
             }
         }
@@ -924,6 +989,10 @@ int main()
     }
 
     queue<Regex*> tokens = set_tokens(accept_examples,literal,general,include,exclude_node);
+    // queue<Regex*> tokens;
+    // tokens.push(new Or());
+    // tokens.push(new Num());
+    // tokens.push(new SpecificNum("2"));
 // return 0;
     Regex* p = algo1(tokens,accept_examples,reject_examples,exclude_tree);
     if (p!=nullptr) {
@@ -935,8 +1004,13 @@ int main()
     return 0;
 }
 
-
-
+//TODO feasable
+//TODO skip_token_if_p (bug and improve)
+//TODO tuple and move and ref and faster containers
+//TOODO//do e1@8@num so you dont take 8 from example 1 in the SpecifiChars//then to get 8[0-9] we need 88 literal-general
+//TODO use specificchar to concat all chars instead of concatting tree
+//TODO create BIG_OR with string chars whre toRegex adds "|" between each 2 chars
+//TODO or(or(),) and or() will ceate duplicates
 
 
 
