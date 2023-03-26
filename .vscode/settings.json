@@ -1,0 +1,13 @@
+{
+    "files.associations": {
+        "deque": "cpp",
+        "algorithm": "cpp",
+        "xutility": "cpp",
+        "queue": "cpp",
+        "vector": "cpp",
+        "ostream": "cpp",
+        "xstring": "cpp",
+        "iostream": "cpp",
+        "regex": "cpp"
+    }
+}

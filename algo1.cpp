@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <regex>
 #include <vector>
-
+#include <deque>
 // #include "CatchMemoryLeak.h"
 // #include "dbg.h"
 
@@ -133,12 +133,14 @@ public:
     bool isLet;
     bool isLow;
     bool isCap;
-
-    Regex() : isConcrete(false), closest_leaf(0), isNum(false), isLet(false), isLow(false), isCap(false) {}
+    int bonus;
+    int total;
+    Regex(int bonus =0) :bonus(bonus),total(bonus), isConcrete(false), closest_leaf(0), isNum(false), isLet(false), isLow(false), isCap(false) {}
     virtual ~Regex() = default;
     Regex(const Regex& other) = default;
     Regex& operator=(const Regex& other) = delete;
     virtual Regex* clone() const = 0;//{return new Regex(*this);}// = 0;
+    bool  operator<(const Regex& other){return (total < other.total ? true: false);};
 
     virtual bool setClosestLeaf(Regex* token) = 0;//{return nullptr;}// = 0;
     virtual operator string() const = 0;//{return"";}// = 0;
@@ -150,7 +152,7 @@ public:
 class Concrete : public Regex
 {
 public:
-    Concrete() : Regex() {
+    Concrete(int bonus =0) : Regex(bonus) {
         isConcrete = true;
     }
     ~Concrete() override = default;
@@ -176,8 +178,8 @@ public:
     string c;
 // string name;
 
-    SpecificChar(string c) : c(c) {}//{name="CHAR";}
-    SpecificChar(char c) : c(string(1,c)) {}//{name="CHAR";}
+    SpecificChar(string c,int bonus =0) : Concrete(bonus) ,c(c) {}//{name="CHAR";}
+    SpecificChar(char c,int bonus = 0) : Concrete(bonus) ,c(string(1,c)) {}//{name="CHAR";}
     virtual SpecificChar* clone() const override {
         return new SpecificChar(*this);
     }
@@ -209,9 +211,10 @@ class Unary : public Regex
 public:
     Regex* e;
 
-    Unary(Regex* e = nullptr) : Regex() {
+    Unary(Regex* e = nullptr,int bonus =0 ) : Regex(bonus) {
         if (e!=nullptr) {
             isConcrete = e->isConcrete;
+            total += e->total;
             closest_leaf = e->closest_leaf + 1;
         } else {
             // isConcrete = false;
@@ -233,11 +236,14 @@ public:
         bool ischanged = false;
         if (e==nullptr) {
             e = token;
+            total += e->total;
             closest_leaf = token->closest_leaf + 1;
             isConcrete = token->isConcrete;
             ischanged = true;
         } else if (!e->isConcrete) {
+            total -= e->total;
             ischanged = e->setClosestLeaf(token);
+            total += e->total;
             closest_leaf = e->closest_leaf + 1;
             isConcrete = e->isConcrete;
         }
@@ -265,15 +271,17 @@ public:
     Regex* e1;
     Regex* e2;
 
-    Binary(Regex* e1 = nullptr, Regex* e2 = nullptr) : Regex() {
+    Binary(Regex* e1 = nullptr, Regex* e2 = nullptr, int bonus= 0) : Regex(bonus) {
         if (e1!=nullptr) {
             isConcrete = e1->isConcrete;
             closest_leaf = e1->closest_leaf + 1;
+            total+= e1->total;
         } else {
             // isConcrete = false;
             closest_leaf = 1;
         }
         if (e2!=nullptr) {
+            total += e2->total;
             isConcrete = isConcrete && e2->isConcrete;
             closest_leaf = min(closest_leaf,e2->closest_leaf+1);
         } else {
@@ -302,24 +310,34 @@ public:
         if (e1==nullptr) {
             e1 = token;
             ischanged = true;
+            total += e1->total;
         } else if (e2==nullptr) {
             e2 = token;
             ischanged = true;
+            total += e2->total;
         } else {
             if (e1->isConcrete) {
                 if (e2->isConcrete) {
                     return false;
                 } else {
+                    total -= e2->total;
                     ischanged = e2->setClosestLeaf(token);
+                    total += e2->total;
                 }
             } else {
                 if (e2->isConcrete) {
+                    total -= e1->total;
                     ischanged = e1->setClosestLeaf(token);
+                    total += e1->total;
                 } else {
                     if (e1->closest_leaf<=e2->closest_leaf) {
+                        total -= e1->total;
                         ischanged = e1->setClosestLeaf(token);
+                        total += e1->total;
                     } else {
+                        total -= e2->total;
                         ischanged = e2->setClosestLeaf(token);
+                        total += e2->total;
                     }
                 }
             }
@@ -369,7 +387,7 @@ REGEX_CLASS_BINARY(And,"and","&");
 class Or : public Binary
 {
 public:
-    Or(Regex* e1 = nullptr, Regex* e2 = nullptr) : Binary(e1,e2) {
+    Or(Regex* e1 = nullptr, Regex* e2 = nullptr,int bonus=0) : Binary(e1,e2,bonus) {
         if (e1!=nullptr) {
             isNum = e1->isNum;
             isLow = e1->isLow;
@@ -394,7 +412,7 @@ public:
             return false;
         }
 
-        if (e2==nullptr) {
+        if (e2==nullptr) {                 //why not addd token to e2
             // isNum = false;
             // isLow = false;
             // isCap = false;
@@ -402,6 +420,7 @@ public:
             isNum = e1->isNum && e2->isNum;
             isLow = e1->isLow && e2->isLow;
             isCap = e1->isCap && e2->isCap;
+            total+= e1->total + e2->total ;                               // another change might be bug ???
         }
 
         return true;
@@ -594,14 +613,20 @@ queue<Regex*> set_tokens(const vector<string>& accept_examples,
 cout<<"the tokens: ";
     for (auto iter = literal.cbegin(); iter!=literal.cend(); ++iter) {
 cout<<string(**iter)<<" ";
+        (*iter)->bonus = 1 ;
+        (*iter)->total = 1 ;
         tokens.push((*iter)->clone());
     }
     for (auto iter = general.cbegin(); iter!=general.cend(); ++iter) {
 cout<<string(**iter)<<" ";
+        (*iter)->bonus = 1 ;
+        (*iter)->total = 1 ;
         tokens.push((*iter)->clone());
     }
     for (auto iter = include.cbegin(); iter!=include.cend(); ++iter) {
 cout<<string(**iter)<<" ";
+        (*iter)->bonus = 1 ;
+        (*iter)->total = 1 ;
         tokens.push((*iter)->clone());
     }
 
@@ -749,7 +774,6 @@ bool skip_token_for_p(const Regex* const p, const Regex* const token)
 queue<Regex*> expand(const queue<Regex*>& tokens, Regex* p, const vector<Regex*>& exclude_tree, queue<Regex*>& worklist_concrete)
 {
     queue<Regex*> tokens_copy(tokens);
-
     if (p==nullptr) {
         queue<Regex*> tokens_clone;
         while (tokens_copy.size()>0) {
@@ -776,9 +800,12 @@ queue<Regex*> expand(const queue<Regex*>& tokens, Regex* p, const vector<Regex*>
 // cout<<endl;
         Regex* q = p->clone();
         q->setClosestLeaf(token);
+        //cout << "wtf man13 "<< endl;
         bool push = true;
         for (auto iter = exclude_tree.cbegin(); iter!=exclude_tree.cend(); ++iter) {
+            cout << "wtf man1 "<< endl;
             if (q->toRegex().find((*iter)->toRegex()) != std::string::npos) {
+                cout << "wtf man "<< endl;
                 push = false;
                 delete q;
                 break;
@@ -796,9 +823,10 @@ queue<Regex*> expand(const queue<Regex*>& tokens, Regex* p, const vector<Regex*>
 }
 
 //sort
-Regex* algo1(const queue<Regex*>& tokens, const vector<string>& accept,
+vector<Regex*> algo1(const queue<Regex*>& tokens, const vector<string>& accept,
     const vector<string>& reject, const vector<Regex*>& exclude_tree)
 {
+    vector<Regex*> five_Sameples;
     chrono::steady_clock::time_point begin = chrono::steady_clock::now();
 
     queue<Regex*> worklist;
@@ -819,6 +847,7 @@ Regex* algo1(const queue<Regex*>& tokens, const vector<string>& accept,
                     break;
                 }
             }
+            bool is_good_Result = false;
             if (acc) {
                 bool rej = true;
                 for (int i=0; (size_t)i<reject.size();++i) {
@@ -827,24 +856,42 @@ Regex* algo1(const queue<Regex*>& tokens, const vector<string>& accept,
                         break;
                     }
                 }
-                if (rej) {
+                bool had_him = false;
+                  for(auto iter=five_Sameples.begin() ; iter!= five_Sameples.end();++iter){
+                    if ((*iter)->toRegex()== p->toRegex()){
+                         had_him = true;
+                         }
+                 }
+                if (rej && !had_him) {
+                    is_good_Result= true;
+
                     cout<<string(*p)<<" matches"<<endl;
                     cout<<chrono::duration_cast<chrono::microseconds>(chrono::steady_clock::now()-begin).count()/1000000.0<<":";
                     cout<<"\t\t"+p->toRegex()<<endl;
-                    while (worklist_concrete.size() > 0) {
+                    five_Sameples.push_back(p);
+                    bool finished = false ;
+                    if ( five_Sameples.size() == 5){
+                        finished = true ;
+                    }
+                    while (worklist_concrete.size() > 0 && finished) {
                         Regex* p_ = worklist_concrete.front();
                         worklist_concrete.pop();
                         delete p_;
                     }
-                    while (worklist.size() > 0) {
+                    while (worklist.size() > 0 && finished) {
                         Regex* p_ = worklist.front();
                         worklist.pop();
                         delete p_;
                     }
-                    return p;
+                    if(finished){
+                    return five_Sameples;
+                    }
+                    //return p;
                 }
             }
+            if (!is_good_Result){
             delete p;
+            }
         }
 
         //sort worklist
@@ -852,13 +899,32 @@ Regex* algo1(const queue<Regex*>& tokens, const vector<string>& accept,
         worklist.pop();
 // if(p!=nullptr){cout<<"p: "<<string(*p)<<endl;}//" isConcrete: "<<(p->isConcrete ? "True" : "False")<<" closest_leaf: "<<p->closest_leaf<<endl;}
         //TODO: pass worklist with ref to do less copies
-        queue<Regex*> worklist_ = expand(tokens,p,exclude_tree,worklist_concrete);
-        while (worklist_.size() > 0) {
-            worklist.push(worklist_.front());
-            worklist_.pop();
+            queue<Regex*> worklist_ = expand(tokens,p,exclude_tree,worklist_concrete);
+            while (worklist_.size() > 0) {
+                worklist.push(worklist_.front());
+                worklist_.pop();
+            }
+            vector<Regex*> vec(worklist.size());
+            int i =0;
+            while (!worklist.empty()) {
+                vec[i] = worklist.front();
+                // if(vec[i] ->total > 0 ){
+                //     cout << "something "<< endl ;
+                // }
+                 worklist.pop();
+                i++;
+                }
+            sort(vec.begin(), vec.end(), [](Regex* a, Regex* b) {
+                //    if(a-> total > 0  || b->total > 0 ){
+                //    cout<< "fffffffffffffffffffffffffffffffffffffffffffffffffffffffff" <<endl;}
+
+                    return *a < *b;
+            });
+    for (auto it = vec.begin(); it != vec.end(); ++it) {
+         worklist.push(*it);
         }
     }
-    return nullptr;
+    return five_Sameples;
 }
 
 #undef REGEX_CLASS_CONCRETE
@@ -907,15 +973,31 @@ int main()//not abc = [^a]*[^b]*[^c*] ??
     //in expand set hight limit to expand with concretes only, and after that try Unary Binary (dont create untill finish of prev height)
 
     //from whatever is not in acc, like letters now, remove from tokens
-    vector<string> accept_examples = {"80","81","82","83","84"};//if max len is t, then concat must use optional after t leaves
-    vector<string> reject_examples = {"85","86","87","88","89"};
+    // vector<string> accept_examples = {"80","81","82","83","84"};//if max len is t, then concat must use optional after t leaves
+    // vector<string> reject_examples = {"85","86","87","8","89"};
 
-    vector<string> literal_str = {"80","81","2","3","4"};
-    vector<string> general_str = {"num"};
+    // vector<string> literal_str = {"80","81","2","3","4", "8"};
+    // vector<string> general_str = {"num"};
 
-    vector<string> include_Str = {"or","concat"};
-    vector<string> exclude_Str = {"and","star","optional","contain","let","low","cap"};
+    // vector<string> include_Str = {"or","concat"};
+    // vector<string> exclude_Str = {"and","star","optional","contain","let","low","cap"};
 
+    // vector<string> accept_examples = {"05","052","0526","052686","0"};//if max len is t, then concat must use optional after t leaves
+    // vector<string> reject_examples = {"12","212","ab","23","25"};
+
+    // vector<string> literal_str = {"05","052"};
+    // vector<string> general_str = {"num"};
+
+    // vector<string> include_Str = {"or","concat"s};
+    // vector<string> exclude_Str = {"and","star","optional","contain","let","low","cap", "any"};
+    vector<string> accept_examples = {"123","1234","12","1","12345"};//if max len is t, then concat must use optional after t leaves
+    vector<string> reject_examples = {"7","6","5","4","3"};
+
+    vector<string> literal_str = {"1"};
+    vector<string> general_str = {};
+
+    vector<string> include_Str = {"concat","or"};
+    vector<string> exclude_Str = {"and","star","optional","contain","let","low","cap", "any", "endwith"};
     //no duplicates
     //all strings stripped and valid
     //sort each str set and (nlogn) find if exclude has something common with any of the other (n)
@@ -994,12 +1076,18 @@ int main()//not abc = [^a]*[^b]*[^c*] ??
     // tokens.push(new Num());
     // tokens.push(new SpecificNum("2"));
 // return 0;
-    Regex* p = algo1(tokens,accept_examples,reject_examples,exclude_tree);
-    if (p!=nullptr) {
-        delete p;
-    } else {
-        cout<<"the synthesizer didn't find any regular expressoin"<<endl;
+    // for (auto iter = exclude_tree.cbegin(); iter!=exclude_tree.cend(); ++iter) {
+    cout << exclude_node.size()<<endl;
+    // }
+    vector<Regex*> five_samples = algo1(tokens,accept_examples,reject_examples,exclude_tree);
+    for(auto iter=five_samples.begin() ; iter!= five_samples.end();++iter){
+        cout << "match   " << string(*(*iter)) << endl;
     }
+    // if (p!=nullptr) {
+    //     delete p;
+    // } else {
+    //     cout<<"the synthesizer didn't find any regular expressoin"<<endl;
+    // }
     // reportUnreleasedHeap();
     return 0;
 }
