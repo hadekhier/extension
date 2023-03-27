@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <regex>
 #include <vector>
+#include <ctime>
 #include <deque>
 // #include "CatchMemoryLeak.h"
 // #include "dbg.h"
@@ -412,17 +413,17 @@ public:
             return false;
         }
 
-        if (e2==nullptr) {                 //why not addd token to e2
+        if (e2==nullptr) {
             // isNum = false;
             // isLow = false;
             // isCap = false;
+
         } else {
             isNum = e1->isNum && e2->isNum;
             isLow = e1->isLow && e2->isLow;
             isCap = e1->isCap && e2->isCap;
-            total+= e1->total + e2->total ;                               // another change might be bug ???
         }
-
+        total += token->total;
         return true;
     }
 
@@ -826,6 +827,8 @@ queue<Regex*> expand(const queue<Regex*>& tokens, Regex* p, const vector<Regex*>
 vector<Regex*> algo1(const queue<Regex*>& tokens, const vector<string>& accept,
     const vector<string>& reject, const vector<Regex*>& exclude_tree)
 {
+    time_t start,finish;
+    time(&start);
     vector<Regex*> five_Sameples;
     chrono::steady_clock::time_point begin = chrono::steady_clock::now();
 
@@ -841,6 +844,12 @@ vector<Regex*> algo1(const queue<Regex*>& tokens, const vector<string>& accept,
             cout<<"\t\t"+p->toRegex()<<endl;
             std::regex r(p->toRegex());
             bool acc = true;
+            time(&finish);
+            cout << difftime(finish,start) << endl ;
+            if (difftime(finish,start) > 120 ){
+                cout << "out of time need more examples " << endl;
+                cout << "should we save or not ? ";
+            }
             for (int i=0; (size_t)i<accept.size();++i) {
                 if (!regex_match(accept[i],r)) {
                     acc = false;
@@ -990,14 +999,22 @@ int main()//not abc = [^a]*[^b]*[^c*] ??
 
     // vector<string> include_Str = {"or","concat"s};
     // vector<string> exclude_Str = {"and","star","optional","contain","let","low","cap", "any"};
-    vector<string> accept_examples = {"123","1234","12","1","12345"};//if max len is t, then concat must use optional after t leaves
-    vector<string> reject_examples = {"7","6","5","4","3"};
+    // vector<string> accept_examples = {"123","1234","12","1","12345"};//if max len is t, then concat must use optional after t leaves
+    // vector<string> reject_examples = {"7","6","5","4","3"};
 
-    vector<string> literal_str = {"1"};
-    vector<string> general_str = {};
+    // vector<string> literal_str = {"1"};
+    // vector<string> general_str = {};
+
+    // vector<string> include_Str = {"concat","or"};
+    // vector<string> exclude_Str = {"and","star","optional","contain","let","low","cap", "any", "endwith"};
+        vector<string> accept_examples = {"abcd","b","c","d","e"};//if max len is t, then concat must use optional after t leaves
+    vector<string> reject_examples = {};
+
+    vector<string> literal_str = {"a"};
+    vector<string> general_str = {"let"};
 
     vector<string> include_Str = {"concat","or"};
-    vector<string> exclude_Str = {"and","star","optional","contain","let","low","cap", "any", "endwith"};
+    vector<string> exclude_Str = {"and","star","optional","contain","let","low","cap", "any"};
     //no duplicates
     //all strings stripped and valid
     //sort each str set and (nlogn) find if exclude has something common with any of the other (n)
